@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import PasswordInput from '../components/PasswordInput';
 
 export default function Register() {
   const { register } = useAuth();
@@ -46,14 +47,9 @@ export default function Register() {
           className="mb-4 w-full rounded border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
         />
         <label className="mb-1 block text-sm font-medium text-gray-700">Password</label>
-        <input
-          type="password"
-          required
-          minLength={8}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="mb-6 w-full rounded border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
-        />
+        <div className="mb-6">
+          <PasswordInput required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} />
+        </div>
         <button
           type="submit"
           disabled={submitting}

@@ -12,6 +12,11 @@ enum Role {
   MEMBER
 }
 
+enum GlobalRole {
+  USER
+  SUPER_ADMIN
+}
+
 enum StatusCategory {
   TODO
   IN_PROGRESS
@@ -39,6 +44,7 @@ model User {
   passwordHash String
   name         String
   avatarUrl    String?
+  role         GlobalRole @default(USER)
   createdAt    DateTime @default(now())
 
   ledProjects      Project[]       @relation("ProjectLead")
@@ -46,6 +52,18 @@ model User {
   reportedIssues   Issue[]         @relation("ReportedIssues")
   assignedIssues   Issue[]         @relation("AssignedIssues")
   comments         Comment[]
+  passwordResetTokens PasswordResetToken[]
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Project {

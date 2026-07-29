@@ -1,10 +1,13 @@
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { z } = require('zod');
 const prisma = require('../config/db');
 const { HttpError } = require('../middleware/errorHandler');
+const { sendPasswordResetEmail } = require('../utils/mailer');
 
 const SALT_ROUNDS = 10;
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 const registerSchema = z.object({
   email: z.string().email(),
@@ -16,6 +19,19 @@ const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
 });
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+});
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  password: z.string().min(8),
+});
+
+function hashToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
 
 function signToken(user) {
   return jwt.sign({ sub: user.id, email: user.email }, process.env.JWT_SECRET, {
@@ -70,4 +86,49 @@ async function me(req, res) {
   res.json({ user: toPublicUser(user) });
 }
 
-module.exports = { register, login, me };
+async function forgotPassword(req, res) {
+  const { email } = forgotPasswordSchema.parse(req.body);
+
+  const user = await prisma.user.findUnique({ where: { email } });
+  // Always respond the same way whether or not the account exists, so this
+  // endpoint can't be used to enumerate registered emails.
+  if (user) {
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    await prisma.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: hashToken(rawToken),
+        expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
+      },
+    });
+
+    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${rawToken}`;
+    try {
+      await sendPasswordResetEmail(user.email, resetUrl);
+    } catch (err) {
+      console.error('Failed to send password reset email:', err.message);
+    }
+  }
+
+  res.json({ message: 'If that email is registered, a reset link has been sent.' });
+}
+
+async function resetPassword(req, res) {
+  const { token, password } = resetPasswordSchema.parse(req.body);
+  const tokenHash = hashToken(token);
+
+  const resetToken = await prisma.passwordResetToken.findUnique({ where: { tokenHash } });
+  if (!resetToken || resetToken.usedAt || resetToken.expiresAt < new Date()) {
+    throw new HttpError(400, 'This reset link is invalid or has expired');
+  }
+
+  const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: resetToken.userId }, data: { passwordHash } }),
+    prisma.passwordResetToken.update({ where: { id: resetToken.id }, data: { usedAt: new Date() } }),
+  ]);
+
+  res.json({ message: 'Password has been reset. You can now sign in.' });
+}
+
+module.exports = { register, login, me, forgotPassword, resetPassword };

@@ -40,7 +40,7 @@ const issueInclude = {
 };
 
 async function list(req, res) {
-  const { project } = await requireProjectMember(req.params.id, req.user.id);
+  const { project } = await requireProjectMember(req.params.id, req.user.id, req.user.role);
 
   const where = { projectId: project.id };
   if (req.query.type) where.type = req.query.type;
@@ -58,7 +58,7 @@ async function list(req, res) {
 
 async function create(req, res) {
   const data = createIssueSchema.parse(req.body);
-  const { project } = await requireProjectMember(req.params.id, req.user.id);
+  const { project } = await requireProjectMember(req.params.id, req.user.id, req.user.role);
 
   if (data.epicId && data.type === 'SUBTASK') {
     throw new HttpError(400, 'Subtasks link via parentId, not epicId');
@@ -139,7 +139,7 @@ async function getById(req, res) {
   if (!issue) {
     throw new HttpError(404, 'Issue not found');
   }
-  await requireProjectMember(issue.projectId, req.user.id);
+  await requireProjectMember(issue.projectId, req.user.id, req.user.role);
   res.json({ issue });
 }
 
@@ -150,7 +150,7 @@ async function update(req, res) {
   if (!existing) {
     throw new HttpError(404, 'Issue not found');
   }
-  const { project } = await requireProjectMember(existing.projectId, req.user.id);
+  const { project } = await requireProjectMember(existing.projectId, req.user.id, req.user.role);
 
   if (data.statusId) {
     const status = await prisma.status.findUnique({ where: { id: data.statusId } });
@@ -181,7 +181,7 @@ async function remove(req, res) {
   if (!existing) {
     throw new HttpError(404, 'Issue not found');
   }
-  await requireProjectMember(existing.projectId, req.user.id);
+  await requireProjectMember(existing.projectId, req.user.id, req.user.role);
 
   await prisma.issue.delete({ where: { id: existing.id } });
   res.status(204).send();

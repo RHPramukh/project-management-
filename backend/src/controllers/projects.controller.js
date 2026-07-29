@@ -25,8 +25,9 @@ const addMemberSchema = z.object({
 });
 
 async function list(req, res) {
+  const where = req.user.role === 'SUPER_ADMIN' ? {} : { members: { some: { userId: req.user.id } } };
   const projects = await prisma.project.findMany({
-    where: { members: { some: { userId: req.user.id } } },
+    where,
     orderBy: { createdAt: 'desc' },
   });
   res.json({ projects });
@@ -58,13 +59,13 @@ async function create(req, res) {
 }
 
 async function getById(req, res) {
-  const { project } = await requireProjectMember(req.params.id, req.user.id);
+  const { project } = await requireProjectMember(req.params.id, req.user.id, req.user.role);
   res.json({ project });
 }
 
 async function update(req, res) {
   const data = updateProjectSchema.parse(req.body);
-  const { project } = await requireProjectAdmin(req.params.id, req.user.id);
+  const { project } = await requireProjectAdmin(req.params.id, req.user.id, req.user.role);
 
   const updated = await prisma.project.update({
     where: { id: project.id },
@@ -74,14 +75,14 @@ async function update(req, res) {
 }
 
 async function remove(req, res) {
-  const { project } = await requireProjectAdmin(req.params.id, req.user.id);
+  const { project } = await requireProjectAdmin(req.params.id, req.user.id, req.user.role);
   await prisma.project.delete({ where: { id: project.id } });
   res.status(204).send();
 }
 
 async function addMember(req, res) {
   const data = addMemberSchema.parse(req.body);
-  const { project } = await requireProjectAdmin(req.params.id, req.user.id);
+  const { project } = await requireProjectAdmin(req.params.id, req.user.id, req.user.role);
 
   const user = await prisma.user.findUnique({ where: { id: data.userId } });
   if (!user) {
@@ -98,7 +99,7 @@ async function addMember(req, res) {
 }
 
 async function removeMember(req, res) {
-  const { project } = await requireProjectAdmin(req.params.id, req.user.id);
+  const { project } = await requireProjectAdmin(req.params.id, req.user.id, req.user.role);
   const { userId } = req.params;
 
   if (userId === project.leadId) {
